@@ -1,0 +1,10 @@
+.git
+.github
+.gitignore
+.distignore
+.editorconfig
+phpcs.xml
+composer.json
+composer.lock
+node_modules
+tests
