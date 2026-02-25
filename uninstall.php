@@ -13,7 +13,6 @@ global $wpdb;
 
 // Drop custom tables.
 $tables = array(
-	$wpdb->prefix . 'ais_api_keys',
 	$wpdb->prefix . 'ais_cart_sessions',
 	$wpdb->prefix . 'ais_rate_limits',
 );
@@ -35,6 +34,13 @@ $options = array(
 	'ais_allow_http',
 	'ais_webhook_url',
 	'ais_webhook_secret',
+	// Discovery options.
+	'ais_enable_discovery',
+	'ais_enable_schema_enhancement',
+	'ais_enable_llms_txt',
+	'ais_enable_agent_json',
+	'ais_enable_product_feed',
+	'ais_enable_markdown_negotiation',
 );
 
 foreach ( $options as $option ) {
@@ -43,6 +49,7 @@ foreach ( $options as $option ) {
 
 // Delete transients.
 delete_transient( 'ais_extension_scan' );
+delete_transient( 'ais_product_feed' );
 
 // Clear scheduled events.
 wp_clear_scheduled_hook( 'ais_daily_extension_scan' );

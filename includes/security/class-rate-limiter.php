@@ -10,7 +10,7 @@ namespace AIShopping\Security;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Token-bucket rate limiter using a custom DB table.
+ * Token-bucket rate limiter using a custom DB table, keyed by IP address.
  */
 class Rate_Limiter {
 
@@ -26,12 +26,12 @@ class Rate_Limiter {
 
 		$sql = "CREATE TABLE {$table} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-			key_id BIGINT UNSIGNED NOT NULL,
+			ip_address VARCHAR(45) NOT NULL,
 			bucket VARCHAR(10) NOT NULL DEFAULT 'read',
 			tokens INT UNSIGNED NOT NULL DEFAULT 0,
 			last_refill DATETIME NOT NULL,
 			PRIMARY KEY (id),
-			UNIQUE KEY key_bucket (key_id, bucket)
+			UNIQUE KEY ip_bucket (ip_address, bucket)
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -41,20 +41,14 @@ class Rate_Limiter {
 	/**
 	 * Check and consume a rate limit token.
 	 *
-	 * @param array  $key_row   API key row from Auth.
 	 * @param string $operation 'read' or 'write'.
 	 * @return array{allowed: bool, limit: int, remaining: int, reset: int}
 	 */
-	public static function check( $key_row, $operation = 'read' ) {
-		$bucket    = 'write' === $operation ? 'write' : 'read';
-		$key_field = 'write' === $operation ? 'rate_limit_write' : 'rate_limit_read';
+	public static function check( $operation = 'read' ) {
+		$bucket = 'write' === $operation ? 'write' : 'read';
 
-		// Per-key override or global default.
-		$limit = ! empty( $key_row[ $key_field ] ) ? (int) $key_row[ $key_field ] : 0;
-		if ( 0 === $limit ) {
-			$default_option = 'write' === $operation ? 'ais_rate_limit_write' : 'ais_rate_limit_read';
-			$limit          = (int) get_option( $default_option, 'write' === $operation ? 30 : 60 );
-		}
+		$default_option = 'write' === $operation ? 'ais_rate_limit_write' : 'ais_rate_limit_read';
+		$limit          = (int) get_option( $default_option, 'write' === $operation ? 30 : 60 );
 
 		if ( 0 === $limit ) {
 			// Rate limiting disabled.
@@ -66,6 +60,8 @@ class Rate_Limiter {
 			);
 		}
 
+		$ip = self::get_client_ip();
+
 		global $wpdb;
 		$table = $wpdb->prefix . self::TABLE;
 		$now   = current_time( 'mysql' );
@@ -73,8 +69,8 @@ class Rate_Limiter {
 		// Get or create bucket.
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE key_id = %d AND bucket = %s",
-				$key_row['id'],
+				"SELECT * FROM {$table} WHERE ip_address = %s AND bucket = %s",
+				$ip,
 				$bucket
 			),
 			ARRAY_A
@@ -84,12 +80,12 @@ class Rate_Limiter {
 			$wpdb->insert(
 				$table,
 				array(
-					'key_id'      => $key_row['id'],
+					'ip_address'  => $ip,
 					'bucket'      => $bucket,
 					'tokens'      => $limit - 1,
 					'last_refill' => $now,
 				),
-				array( '%d', '%s', '%d', '%s' )
+				array( '%s', '%s', '%d', '%s' )
 			);
 
 			return array(
@@ -125,11 +121,11 @@ class Rate_Limiter {
 				'last_refill' => $last_refill,
 			),
 			array(
-				'key_id' => $key_row['id'],
-				'bucket' => $bucket,
+				'ip_address' => $ip,
+				'bucket'     => $bucket,
 			),
 			array( '%d', '%s' ),
-			array( '%d', '%s' )
+			array( '%s', '%s' )
 		);
 
 		return array(
@@ -138,6 +134,26 @@ class Rate_Limiter {
 			'remaining' => $tokens - 1,
 			'reset'     => time() + 60,
 		);
+	}
+
+	/**
+	 * Get the client IP address.
+	 *
+	 * @return string
+	 */
+	private static function get_client_ip() {
+		$headers = array( 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR' );
+		foreach ( $headers as $header ) {
+			if ( ! empty( $_SERVER[ $header ] ) ) {
+				// X-Forwarded-For may contain multiple IPs — take the first.
+				$ip = strtok( sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) ), ',' );
+				$ip = trim( $ip );
+				if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+					return $ip;
+				}
+			}
+		}
+		return '0.0.0.0';
 	}
 
 	/**

@@ -99,9 +99,6 @@ function ais_activate() {
 	require_once AIS_PLUGIN_DIR . 'includes/cart/class-cart-session.php';
 	\AIShopping\Cart\Cart_Session::create_tables();
 
-	require_once AIS_PLUGIN_DIR . 'includes/security/class-auth.php';
-	\AIShopping\Security\Auth::create_tables();
-
 	require_once AIS_PLUGIN_DIR . 'includes/security/class-rate-limiter.php';
 	\AIShopping\Security\Rate_Limiter::create_tables();
 
@@ -118,6 +115,13 @@ function ais_activate() {
 		'ais_rate_limit_write'     => 30,
 		'ais_enable_logging'       => 'no',
 		'ais_allow_http'           => 'yes',
+		// Discovery layer defaults.
+		'ais_enable_discovery'            => 'yes',
+		'ais_enable_schema_enhancement'   => 'yes',
+		'ais_enable_llms_txt'             => 'yes',
+		'ais_enable_agent_json'           => 'yes',
+		'ais_enable_product_feed'         => 'yes',
+		'ais_enable_markdown_negotiation' => 'yes',
 	);
 
 	foreach ( $defaults as $key => $value ) {

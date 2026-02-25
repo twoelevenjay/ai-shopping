@@ -9,7 +9,6 @@ namespace AIShopping\Webhooks;
 
 defined( 'ABSPATH' ) || exit;
 
-use AIShopping\Security\Auth;
 use AIShopping\Security\HMAC;
 
 /**

@@ -1,6 +1,9 @@
 <?php
 /**
- * Base REST controller with authentication, rate limiting, and error formatting.
+ * Base REST controller with rate limiting and error formatting.
+ *
+ * Read endpoints are open (like a storefront). Write endpoints require
+ * user authentication. Rate limiting is per-IP.
  *
  * @package AIShopping\Api
  */
@@ -9,7 +12,6 @@ namespace AIShopping\Api;
 
 defined( 'ABSPATH' ) || exit;
 
-use AIShopping\Security\Auth;
 use AIShopping\Security\Rate_Limiter;
 
 /**
@@ -30,7 +32,7 @@ abstract class REST_Controller {
 	abstract public function register_routes();
 
 	/**
-	 * Standard permission check for read endpoints.
+	 * Permission check for read endpoints — open to everyone.
 	 *
 	 * @param \WP_REST_Request $request The request.
 	 * @return true|\WP_Error
@@ -40,7 +42,7 @@ abstract class REST_Controller {
 	}
 
 	/**
-	 * Standard permission check for write endpoints.
+	 * Permission check for write endpoints — requires authenticated user.
 	 *
 	 * @param \WP_REST_Request $request The request.
 	 * @return true|\WP_Error
@@ -62,30 +64,17 @@ abstract class REST_Controller {
 			return $this->error( 'https_required', __( 'HTTPS is required for API access.', 'ai-shopping' ), 403 );
 		}
 
-		$key_row = Auth::validate_request( $request );
-		if ( ! $key_row ) {
+		// Write operations require an authenticated WordPress user.
+		if ( 'write' === $operation && ! is_user_logged_in() ) {
 			return $this->error(
 				'unauthorized',
-				__( 'Invalid or missing API key. Include a valid Bearer token in the Authorization header.', 'ai-shopping' ),
+				__( 'Authentication required. Log in or provide valid credentials to perform this action.', 'ai-shopping' ),
 				401
 			);
 		}
 
-		if ( ! Auth::has_permission( $key_row, $operation ) ) {
-			return $this->error(
-				'forbidden',
-				sprintf(
-					/* translators: %s: required permission level */
-					__( 'This endpoint requires "%s" permission. Your API key has "%s" permission.', 'ai-shopping' ),
-					$operation,
-					$key_row['permissions']
-				),
-				403
-			);
-		}
-
-		// Rate limit check.
-		$rate = Rate_Limiter::check( $key_row, $operation );
+		// Rate limit check (by IP).
+		$rate = Rate_Limiter::check( $operation );
 		if ( ! $rate['allowed'] ) {
 			$response = $this->error(
 				'rate_limit_exceeded',
@@ -99,8 +88,7 @@ abstract class REST_Controller {
 			return $response;
 		}
 
-		// Store key data and rate info on request for downstream use.
-		$request->set_param( '_ais_key', $key_row );
+		// Store rate info on request for downstream use.
 		$request->set_param( '_ais_rate', $rate );
 
 		return true;

@@ -50,6 +50,7 @@ class Plugin {
 		// Admin.
 		if ( is_admin() ) {
 			new Admin\Admin_Page();
+			add_filter( 'woocommerce_get_settings_pages', array( $this, 'add_settings_page' ) );
 		}
 
 		// Scheduled events.
@@ -64,6 +65,20 @@ class Plugin {
 
 		// Webhook dispatcher.
 		new Webhooks\Webhook_Dispatcher();
+
+		// Discovery layer.
+		new Discovery\Discovery();
+	}
+
+	/**
+	 * Add AI Shopping settings page to WooCommerce Settings.
+	 *
+	 * @param array $settings Array of WC_Settings_Page instances.
+	 * @return array
+	 */
+	public function add_settings_page( $settings ) {
+		$settings[] = new Admin\WC_Settings_AI_Shopping();
+		return $settings;
 	}
 
 	/**
